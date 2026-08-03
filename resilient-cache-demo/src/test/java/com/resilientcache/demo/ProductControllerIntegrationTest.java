@@ -36,9 +36,12 @@ class ProductControllerIntegrationTest {
         productRepository.deleteAll();
         // Seed default product for test runs
         productRepository.save(new Product(
-                100L, 
+                "100", 
                 "Premium Widget 100", 
-                99.99, 
+                "Electronics",
+                "99.99", 
+                "149.99",
+                "4.5",
                 "Integration Test Widget"
         ));
     }
@@ -55,8 +58,8 @@ class ProductControllerIntegrationTest {
         assertNotNull(response1);
         Map<String, Object> data1 = (Map<String, Object>) response1.get("data");
         assertNotNull(data1);
-        assertEquals("Premium Widget 100", data1.get("name"));
-        assertEquals(99.99, data1.get("price"));
+        assertEquals("Premium Widget 100", data1.get("productName"));
+        assertEquals("99.99", data1.get("discountedPrice"));
         assertFalse((Boolean) response1.get("cached"), "First hit should not be cached");
 
         // --- 2. Second Call: Cache Hit ---
@@ -65,7 +68,7 @@ class ProductControllerIntegrationTest {
         assertTrue((Boolean) response2.get("cached"), "Second hit should be cached");
         
         Map<String, Object> data2 = (Map<String, Object>) response2.get("data");
-        assertEquals("Premium Widget 100", data2.get("name"));
+        assertEquals("Premium Widget 100", data2.get("productName"));
 
         // --- 3. Database Outage/Deletion Decoupling Check ---
         // Delete the record from the database. Since it is cached, the engine should still serve it!
@@ -76,6 +79,6 @@ class ProductControllerIntegrationTest {
         assertTrue((Boolean) response3.get("cached"), "Should still serve from cache after DB deletion");
         
         Map<String, Object> data3 = (Map<String, Object>) response3.get("data");
-        assertEquals("Premium Widget 100", data3.get("name"));
+        assertEquals("Premium Widget 100", data3.get("productName"));
     }
 }
