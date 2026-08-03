@@ -2,7 +2,8 @@
 
 A highly resilient, multi-level caching system built for Spring Boot applications to shield database performance and guarantee high availability.
 
-🔗 **Live Demo URL:** [https://resilient-cache-engine.onrender.com](https://resilient-cache-engine.onrender.com)
+🔗 **Live Dashboard URL:** [https://resilient-cache-engine.onrender.com](https://resilient-cache-engine.onrender.com) (Redirects to dashboard)
+🔗 **Direct API Test Link:** [https://resilient-cache-engine.onrender.com/products/B07JW9H4J1](https://resilient-cache-engine.onrender.com/products/B07JW9H4J1)
 
 ---
 
