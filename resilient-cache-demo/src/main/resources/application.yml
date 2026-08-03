@@ -20,8 +20,8 @@ spring:
 #    driver-class-name: com.mysql.cj.jdbc.Driver
 
 #     --- Supabase PostgreSQL Configuration (Commented/Saved) ---
-    url: jdbc:postgresql://aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require
-    username: postgres.hptncilzhatgvwbovbux
+    url: jdbc:postgresql://db.hptncilzhatgvwbovbux.supabase.co:5432/postgres?sslmode=require
+    username: postgres
     password: prajyotk#07
     driver-class-name: org.postgresql.Driver
   jpa:
