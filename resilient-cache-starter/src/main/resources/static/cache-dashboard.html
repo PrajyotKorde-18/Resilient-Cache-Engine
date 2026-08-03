@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resilient Cache Engine Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #FAF7FB;
+            --card: #FFFFFF;
+            --primary: #E7B7CC;
+            --primary-dark: #C65D7B;
+            --primary-light: #F7DCE7;
+            --success: #A8C8A2;
+            --success-dark: #6C8E66;
+            --success-light: #E8F5E6;
+            --warning: #F2C57C;
+            --warning-dark: #B3863C;
+            --warning-light: #FCF4E5;
+            --error: #E76F51;
+            --error-dark: #A63F25;
+            --error-light: #FBECE8;
+            --text: #404756;
+            --text-secondary: #8D95A5;
+            --border: #F2E9EF;
+            --shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Sidebar styling */
+        aside {
+            width: 280px;
+            background-color: var(--card);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 2rem 1.5rem;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        /* macOS window controls mock */
+        .mac-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 2.5rem;
+        }
+
+        .mac-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .mac-dot.red { background-color: #ff5f56; }
+        .mac-dot.yellow { background-color: #ffbd2e; }
+        .mac-dot.green { background-color: #27c93f; }
+
+        .brand {
+            margin-bottom: 2rem;
+        }
+
+        .brand h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.5px;
+        }
+
+        .brand p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* Navigation menu */
+        .nav-menu {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .nav-item:hover {
+            background-color: #FAF5F8;
+            color: var(--primary-dark);
+        }
+
+        .nav-item.active {
+            background-color: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+
+        .nav-item svg {
+            width: 18px;
+            height: 18px;
+            stroke-width: 2px;
+        }
+
+        /* Sidebar Health Widget */
+        .sidebar-status {
+            background: #FAF8FB;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .sidebar-status-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+            width: fit-content;
+        }
+
+        .status-badge.up {
+            background-color: var(--success-light);
+            color: var(--success-dark);
+        }
+
+        .status-badge.down {
+            background-color: var(--error-light);
+            color: var(--error-dark);
+        }
+
+        .status-badge.degraded {
+            background-color: var(--warning-light);
+            color: var(--warning-dark);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-badge.up .pulse-dot { background-color: var(--success); animation: soft-pulse 2s infinite; }
+        .status-badge.down .pulse-dot { background-color: var(--error); animation: soft-pulse 1s infinite; }
+        .status-badge.degraded .pulse-dot { background-color: var(--warning); animation: soft-pulse 1.5s infinite; }
+
+        @keyframes soft-pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        /* Main Workspace layout */
+        main {
+            flex-grow: 1;
+            padding: 2.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        /* Controls: Refresh & Action buttons */
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .control-select {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background-color: var(--card);
+            font-size: 0.85rem;
+            font-weight: 500;
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .control-select:focus {
+            border-color: var(--primary);
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: var(--transition);
+        }
+
+        .btn-outline {
+            background-color: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-outline:hover {
+            background-color: #FAF5F8;
+            border-color: var(--primary);
+            color: var(--primary-dark);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: var(--primary-dark);
+        }
+
+        .btn-primary:hover {
+            background-color: #DFA3C4;
+        }
+
+        .btn-danger {
+            background-color: var(--error-light);
+            color: var(--error-dark);
+        }
+
+        .btn-danger:hover {
+            background-color: #F8DCD4;
+        }
+
+        /* Dashboard Overview Grid */
+        .tab-pane {
+            display: none;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .tab-pane.active {
+            display: flex;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background-color: var(--card);
+            border-radius: 20px;
+            padding: 1.75rem;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(242, 233, 239, 0.5);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .card-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-large-number {
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -1px;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+        }
+
+        .card-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* Tier details in Topology card */
+        .tier-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tier-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .tier-name {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .tier-stats-info {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Progress bars */
+        .progress-container {
+            margin-top: 1rem;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .progress-track {
+            height: 8px;
+            background-color: #FAF5F8;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(242, 233, 239, 0.3);
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            width: 0%;
+            background-color: var(--primary);
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Latency list layout */
+        .latency-items {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .latency-sub {
+            background-color: #FAF8FB;
+            border-radius: 14px;
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .latency-num {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        /* Charts grid layout */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .chart-card {
+            min-height: 320px;
+        }
+
+        /* Cache Explorer specific styles */
+        .explorer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-wrapper {
+            position: relative;
+            flex-grow: 1;
+            max-width: 450px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 16px;
+            padding-left: 42px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background-color: var(--card);
+            outline: none;
+            font-size: 0.9rem;
+            transition: var(--transition);
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(231, 183, 204, 0.25);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            stroke: var(--text-secondary);
+        }
+
+        .evict-form {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Table styling */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            padding: 12px 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        tr:hover td {
+            background-color: #FAF8FB;
+        }
+
+        .key-badge {
+            font-family: monospace;
+            background-color: #FAF5F8;
+            color: var(--primary-dark);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .score-pill {
+            background-color: var(--success-light);
+            color: var(--success-dark);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        /* Event logs timeline */
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 1.25rem;
+            padding: 1.25rem;
+            border-radius: 16px;
+            background-color: var(--card);
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.01);
+            transition: var(--transition);
+        }
+
+        .timeline-item:hover {
+            transform: translateX(4px);
+            border-color: var(--primary);
+        }
+
+        .timeline-icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .t-health { background-color: var(--warning-light); color: var(--warning-dark); }
+        .t-failure { background-color: var(--error-light); color: var(--error-dark); }
+        .t-recovery { background-color: var(--success-light); color: var(--success-dark); }
+        .t-clear { background-color: var(--primary-light); color: var(--primary-dark); }
+
+        .timeline-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .timeline-time {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .timeline-msg {
+            font-size: 0.85rem;
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        .timeline-footer {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background-color: var(--card);
+            border: 1px solid var(--success);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            border-radius: 16px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 1000;
+            transform: translateY(150%);
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .toast.success { border-color: var(--success); }
+        .toast.success .toast-icon { background-color: var(--success-light); color: var(--success-dark); }
+        .toast.error { border-color: var(--error); }
+        .toast.error .toast-icon { background-color: var(--error-light); color: var(--error-dark); }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside>
+        <!-- macOS controls -->
+        <div class="mac-header">
+            <span class="mac-dot red"></span>
+            <span class="mac-dot yellow"></span>
+            <span class="mac-dot green"></span>
+        </div>
+
+        <div class="brand">
+            <h1>Resilient Cache</h1>
+            <p>Admin Telemetry & Health</p>
+        </div>
+
+        <!-- Menu Tabs -->
+        <ul class="nav-menu">
+            <li>
+                <div class="nav-item active" onclick="switchTab('dashboard', this)">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    Dashboard
+                </div>
+            </li>
+            <li>
+                <div class="nav-item" onclick="switchTab('explorer', this)">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Cache Explorer
+                </div>
+            </li>
+            <li>
+                <div class="nav-item" onclick="switchTab('logs', this)">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                    Resilience Logs
+                </div>
+            </li>
+        </ul>
+
+        <!-- Bottom Status -->
+        <div class="sidebar-status">
+            <div class="sidebar-status-title">System Status</div>
+            <div class="status-badge up" id="health-badge">
+                <span class="pulse-dot"></span>
+                <span id="health-badge-text">ENGINE ACTIVE</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main>
+        <header>
+            <div>
+                <h2 id="page-title">Dashboard Overview</h2>
+            </div>
+            
+            <div class="header-controls">
+                <select class="control-select" id="refresh-rate" onchange="updateRefreshInterval()">
+                    <option value="2000">Refresh: 2s</option>
+                    <option value="5000" selected>Refresh: 5s</option>
+                    <option value="10000">Refresh: 10s</option>
+                    <option value="30000">Refresh: 30s</option>
+                    <option value="pause">Pause</option>
+                </select>
+
+                <button class="btn btn-outline" onclick="triggerManualRefresh()" title="Refresh Telemetry">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l6.73-6.73"></path></svg>
+                    Refresh
+                </button>
+
+                <button class="btn btn-danger" onclick="flushAllCaches()">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"></path></svg>
+                    Flush All
+                </button>
+            </div>
+        </header>
+
+        <!-- TAB 1: OVERVIEW -->
+        <section id="pane-dashboard" class="tab-pane active">
+            <!-- Telemetry Cards -->
+            <div class="stats-grid">
+                <!-- Topology Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Caching Topology</span>
+                        <svg width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 7v13"></path></svg>
+                    </div>
+                    <div class="card-large-number" id="active-provider" style="text-transform: capitalize;">Multi-level</div>
+                    
+                    <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 12px;">
+                        <div>
+                            <div class="tier-row" style="border-bottom: none; padding: 4px 0;">
+                                <div>
+                                    <span class="tier-name" style="font-weight: 600;">L1 Local (Caffeine)</span>
+                                    <div class="tier-stats-info" id="l1-size-info">0 keys</div>
+                                </div>
+                                <span class="status-badge up" id="l1-badge" style="padding: 2px 8px; font-size: 0.75rem;"><span class="pulse-dot"></span>UP</span>
+                            </div>
+                            <div class="progress-container" style="margin-top: 4px;">
+                                <div class="progress-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px;">
+                                    <span id="l1-hits-misses">Hits: 0 · Misses: 0</span>
+                                    <span id="l1-hit-ratio-text">0% Hit Rate</span>
+                                </div>
+                                <div class="progress-track" style="height: 6px;">
+                                    <div class="progress-fill" id="l1-hit-ratio-fill"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+                            <div class="tier-row" style="border-bottom: none; padding: 4px 0;">
+                                <div>
+                                    <span class="tier-name" style="font-weight: 600;">L2 Shared (Redis)</span>
+                                    <div class="tier-stats-info" id="l2-size-info">0 keys</div>
+                                </div>
+                                <span class="status-badge up" id="l2-badge" style="padding: 2px 8px; font-size: 0.75rem;"><span class="pulse-dot"></span>UP</span>
+                            </div>
+                            <div class="progress-container" style="margin-top: 4px;">
+                                <div class="progress-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px;">
+                                    <span id="l2-hits-misses">Hits: 0 · Misses: 0</span>
+                                    <span id="l2-hit-ratio-text">0% Hit Rate</span>
+                                </div>
+                                <div class="progress-track" style="height: 6px;">
+                                    <div class="progress-fill" id="l2-hit-ratio-fill" style="background-color: var(--success);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Latencies -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Average Latency</span>
+                        <svg width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </div>
+                    <div class="latency-items">
+                        <div class="latency-sub">
+                            <div class="latency-num" id="latency-read">0.0 ms</div>
+                            <div class="card-desc">Avg Read</div>
+                        </div>
+                        <div class="latency-sub">
+                            <div class="latency-num" id="latency-write">0.0 ms</div>
+                            <div class="card-desc">Avg Write</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- JVM Memory footprint -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">JVM Telemetry</span>
+                        <svg width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    </div>
+                    <div class="card-large-number" id="jvm-threads-count">0</div>
+                    <div class="card-desc" style="margin-bottom: 0.75rem;">Active JVM Thread Count</div>
+
+                    <div class="progress-container">
+                        <div class="progress-label">
+                            <span>Used Memory</span>
+                            <span id="jvm-memory-pct">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="jvm-memory-fill"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">
+                            <span id="jvm-memory-used">0 MB</span>
+                            <span id="jvm-memory-total">0 MB</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <span class="card-title">Telemetry: Latency Over Time (ms)</span>
+                    </div>
+                    <div style="position: relative; height: 230px; width: 100%;">
+                        <canvas id="latencyChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <span class="card-title">Telemetry: Hit Ratio Trends (%)</span>
+                    </div>
+                    <div style="position: relative; height: 230px; width: 100%;">
+                        <canvas id="hitRatioChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: CACHE EXPLORER & HOTKEYS -->
+        <section id="pane-explorer" class="tab-pane">
+            <div class="card">
+                <div class="card-header" style="margin-bottom: 1.5rem;">
+                    <div>
+                        <span class="card-title">Active Key Analytics (Decay Scoring)</span>
+                        <p class="card-desc" style="margin-top: 4px;">Recently accessed keys ranked by time-decay popularity score. Prunes automatically.</p>
+                    </div>
+                </div>
+
+                <div class="explorer-header">
+                    <div class="search-wrapper">
+                        <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input type="text" class="search-input" id="key-search" placeholder="Filter hot keys by name..." oninput="filterHotKeys()">
+                    </div>
+
+                    <div class="evict-form">
+                        <input type="text" class="control-select" id="custom-evict-key" placeholder="Enter key to evict..." style="width: 220px; font-size: 0.85rem; padding: 10px 14px;">
+                        <button class="btn btn-outline" onclick="evictCustomKey()">Evict Key</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cache Key</th>
+                                <th>Popularity Score</th>
+                                <th>Last Accessed</th>
+                                <th style="text-align: right; width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hotkeys-tbody">
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 3rem 0;">
+                                    No active hot keys loaded. Generate traffic to view popularity stats.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: RESILIENCE LOGS -->
+        <section id="pane-logs" class="tab-pane">
+            <div class="timeline" id="logs-timeline">
+                <div style="text-align: center; color: var(--text-secondary); padding: 3rem 0;">
+                    Loading events timeline...
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <div class="toast-icon">✓</div>
+        <span id="toast-msg">Success Message</span>
+    </div>
+
+    <!-- Telemetry Script -->
+    <script>
+        let refreshInterval = null;
+        let originalTimeline = [];
+        let originalHotkeys = [];
+
+        // Real-time chart lists
+        const MAX_CHART_POINTS = 15;
+        const chartLabels = [];
+        const readLatencyData = [];
+        const writeLatencyData = [];
+        const l1HitRatioData = [];
+        const l2HitRatioData = [];
+
+        let latencyChart = null;
+        let hitRatioChart = null;
+
+        // Init ChartJS
+        function initCharts() {
+            const ctxLatency = document.getElementById('latencyChart').getContext('2d');
+            latencyChart = new Chart(ctxLatency, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [
+                        {
+                            label: 'Read Latency',
+                            data: readLatencyData,
+                            borderColor: '#C65D7B', // Muted dark pink
+                            backgroundColor: 'rgba(231, 183, 204, 0.15)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'Write Latency',
+                            data: writeLatencyData,
+                            borderColor: '#A8C8A2', // Sage green
+                            backgroundColor: 'rgba(168, 200, 162, 0.15)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                font: { family: 'Inter', size: 11, weight: '500' },
+                                boxWidth: 12
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            grid: { color: '#FAF0F5' },
+                            ticks: { font: { family: 'Inter', size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            const ctxHit = document.getElementById('hitRatioChart').getContext('2d');
+            hitRatioChart = new Chart(ctxHit, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [
+                        {
+                            label: 'L1 Caffeine Hit Rate',
+                            data: l1HitRatioData,
+                            borderColor: '#C65D7B',
+                            backgroundColor: 'transparent',
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: 3
+                        },
+                        {
+                            label: 'L2 Redis Hit Rate',
+                            data: l2HitRatioData,
+                            borderColor: '#A8C8A2',
+                            backgroundColor: 'transparent',
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: 3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                font: { family: 'Inter', size: 11, weight: '500' },
+                                boxWidth: 12
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            grid: { color: '#FAF0F5' },
+                            ticks: { font: { family: 'Inter', size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Tab Switcher
+        function switchTab(tabId, el) {
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            el.classList.add('active');
+
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            document.getElementById('pane-' + tabId).classList.add('active');
+
+            // Update title
+            const titles = {
+                'dashboard': 'Dashboard Overview',
+                'explorer': 'Cache Explorer',
+                'logs': 'Resilience Logs'
+            };
+            document.getElementById('page-title').textContent = titles[tabId];
+            
+            // Re-fetch data instantly
+            triggerManualRefresh();
+        }
+
+        // Show toast dialog
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-msg');
+            const icon = toast.querySelector('.toast-icon');
+
+            msgEl.textContent = message;
+            toast.className = 'toast' + (isError ? ' error' : ' success');
+            icon.textContent = isError ? '!' : '✓';
+
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Evict specific key
+        function evictKey(key) {
+            if (!confirm(`Are you sure you want to evict '${key}' from all cache tiers?`)) {
+                return;
+            }
+
+            fetch(`/api/cache/evict?key=${encodeURIComponent(key)}`, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error("Eviction request failed");
+                    return res.json();
+                })
+                .then(data => {
+                    showToast(data.message || "Key evicted successfully!");
+                    triggerManualRefresh();
+                })
+                .catch(err => {
+                    console.error("Error evicting key:", err);
+                    showToast("Failed to evict cache key", true);
+                });
+        }
+
+        // Evict custom typed key
+        function evictCustomKey() {
+            const input = document.getElementById('custom-evict-key');
+            const key = input.value.trim();
+            if (!key) {
+                showToast("Please enter a valid key", true);
+                return;
+            }
+            evictKey(key);
+            input.value = '';
+        }
+
+        // Flush all caches
+        function flushAllCaches() {
+            if (!confirm("Are you sure you want to flush all caches? This will clear all data in local Caffeine and shared Redis pools.")) {
+                return;
+            }
+
+            fetch('/api/cache/clear', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    showToast(data.message || "All cache levels cleared successfully!");
+                    triggerManualRefresh();
+                })
+                .catch(err => {
+                    console.error("Error clearing caches:", err);
+                    showToast("Failed to flush caches", true);
+                });
+        }
+
+        // Fetch health status
+        function fetchHealth() {
+            fetch('/api/cache/health')
+                .then(res => res.json())
+                .then(data => {
+                    const badge = document.getElementById('health-badge');
+                    const text = document.getElementById('health-badge-text');
+                    const l1Badge = document.getElementById('l1-badge');
+                    const l2Badge = document.getElementById('l2-badge');
+
+                    // Global engine status
+                    if (data.status === 'UP') {
+                        badge.className = 'status-badge up';
+                        text.textContent = 'ENGINE ACTIVE';
+                    } else if (data.status === 'DOWN') {
+                        badge.className = 'status-badge down';
+                        text.textContent = 'OUTAGE DETECTED';
+                    } else {
+                        badge.className = 'status-badge degraded';
+                        text.textContent = 'ENGINE DEGRADED';
+                    }
+
+                    // L1 status
+                    if (data.l1Status === 'UP') {
+                        l1Badge.className = 'status-badge up';
+                        l1Badge.innerHTML = '<span class="pulse-dot"></span>UP';
+                    } else {
+                        l1Badge.className = 'status-badge down';
+                        l1Badge.innerHTML = '<span class="pulse-dot"></span>DOWN';
+                    }
+
+                    // L2 status
+                    if (data.l2Status === 'UP') {
+                        l2Badge.className = 'status-badge up';
+                        l2Badge.innerHTML = '<span class="pulse-dot"></span>UP';
+                    } else {
+                        l2Badge.className = 'status-badge down';
+                        l2Badge.innerHTML = '<span class="pulse-dot"></span>DOWN';
+                    }
+                })
+                .catch(err => console.error("Error fetching health:", err));
+        }
+
+        // Fetch stats & update dashboard overview
+        function fetchStats() {
+            fetch('/api/cache/stats')
+                .then(res => res.json())
+                .then(data => {
+                    // Update header fields
+                    document.getElementById('active-provider').textContent = data.provider;
+                    document.getElementById('latency-read').textContent = data.averageReadLatencyMs.toFixed(2) + ' ms';
+                    document.getElementById('latency-write').textContent = data.averageWriteLatencyMs.toFixed(2) + ' ms';
+
+                    // Update L1/L2 counts & statistics
+                    document.getElementById('l1-size-info').textContent = data.l1Size + ' cached keys';
+                    document.getElementById('l2-size-info').textContent = data.l2Size + ' cached keys';
+
+                    document.getElementById('l1-hits-misses').textContent = `Hits: ${data.l1Hits.toLocaleString()} · Misses: ${data.l1Misses.toLocaleString()}`;
+                    const l1RatioPct = Math.round(data.l1HitRatio * 100);
+                    document.getElementById('l1-hit-ratio-text').textContent = l1RatioPct + '% Hit Rate';
+                    document.getElementById('l1-hit-ratio-fill').style.width = l1RatioPct + '%';
+
+                    document.getElementById('l2-hits-misses').textContent = `Hits: ${data.l2Hits.toLocaleString()} · Misses: ${data.l2Misses.toLocaleString()}`;
+                    const l2RatioPct = Math.round(data.l2HitRatio * 100);
+                    document.getElementById('l2-hit-ratio-text').textContent = l2RatioPct + '% Hit Rate';
+                    document.getElementById('l2-hit-ratio-fill').style.width = l2RatioPct + '%';
+
+                    // Update JVM thread count
+                    document.getElementById('jvm-threads-count').textContent = data.jvmThreads;
+
+                    // Update JVM Memory progress indicator
+                    const totalMB = data.jvmTotalMemory / (1024 * 1024);
+                    const usedMB = data.jvmUsedMemory / (1024 * 1024);
+                    const usagePct = Math.min(Math.round((data.jvmUsedMemory / data.jvmTotalMemory) * 100), 100);
+
+                    document.getElementById('jvm-memory-used').textContent = usedMB.toFixed(0) + ' MB';
+                    document.getElementById('jvm-memory-total').textContent = totalMB.toFixed(0) + ' MB';
+                    document.getElementById('jvm-memory-pct').textContent = usagePct + '%';
+                    document.getElementById('jvm-memory-fill').style.width = usagePct + '%';
+
+                    // Update charts data
+                    const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    
+                    chartLabels.push(timeLabel);
+                    readLatencyData.push(data.averageReadLatencyMs);
+                    writeLatencyData.push(data.averageWriteLatencyMs);
+                    l1HitRatioData.push(Math.round(data.l1HitRatio * 100));
+                    l2HitRatioData.push(Math.round(data.l2HitRatio * 100));
+
+                    if (chartLabels.length > MAX_CHART_POINTS) {
+                        chartLabels.shift();
+                        readLatencyData.shift();
+                        writeLatencyData.shift();
+                        l1HitRatioData.shift();
+                        l2HitRatioData.shift();
+                    }
+
+                    if (latencyChart && hitRatioChart) {
+                        latencyChart.update();
+                        hitRatioChart.update();
+                    }
+                })
+                .catch(err => console.error("Error fetching stats:", err));
+        }
+
+        // Fetch hot keys and build tables
+        function fetchHotKeys() {
+            fetch('/api/cache/hotkeys')
+                .then(res => res.json())
+                .then(data => {
+                    originalHotkeys = data;
+                    filterHotKeys(); // Renders hotkeys using filter keyword
+                })
+                .catch(err => console.error("Error fetching hotkeys:", err));
+        }
+
+        // Filter hotkeys search
+        function filterHotKeys() {
+            const query = document.getElementById('key-search').value.toLowerCase().trim();
+            const tbody = document.getElementById('hotkeys-tbody');
+
+            const filtered = originalHotkeys.filter(hk => hk.key.toLowerCase().includes(query));
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 3rem 0;">
+                            ${originalHotkeys.length === 0 ? "No active hot keys tracked. Send traffic to activate decay analytics." : "No matching keys found."}
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(item => {
+                const lastAccessStr = new Date(item.lastAccessTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                html += `
+                    <tr>
+                        <td><span class="key-badge">${item.key}</span></td>
+                        <td><span class="score-pill">${item.score.toFixed(2)}</span></td>
+                        <td>${lastAccessStr}</td>
+                        <td style="text-align: right;">
+                            <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 8px; color: var(--error-dark); border-color: rgba(231,111,81,0.2);" onclick="evictKey('${item.key}')">
+                                Evict
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        // Fetch resilience logs timeline
+        function fetchTimeline() {
+            fetch('/api/cache/events')
+                .then(res => res.json())
+                .then(data => {
+                    const timeline = document.getElementById('logs-timeline');
+                    if (data.length === 0) {
+                        timeline.innerHTML = `
+                            <div style="text-align: center; color: var(--text-secondary); padding: 3rem 0;">
+                                No resilience events recorded. Cache operating under optimal status.
+                            </div>`;
+                        return;
+                    }
+
+                    // Render event log list
+                    let html = '';
+                    data.forEach(ev => {
+                        let icon = '⚡';
+                        let classBox = 't-health';
+                        let typeTitle = ev.type.replace('_', ' ');
+
+                        if (ev.type === 'FAILURE') {
+                            icon = '✕';
+                            classBox = 't-failure';
+                        } else if (ev.type.startsWith('RECOVERY')) {
+                            icon = '✓';
+                            classBox = 't-recovery';
+                        } else if (ev.type === 'CACHE_CLEAR' || ev.type === 'CACHE_EVICT') {
+                            icon = '⚙';
+                            classBox = 't-clear';
+                        }
+
+                        html += `
+                            <div class="timeline-item">
+                                <div class="timeline-icon-box ${classBox}">${icon}</div>
+                                <div class="timeline-content">
+                                    <div class="timeline-header">
+                                        <span class="timeline-title" style="color: var(--text);">${typeTitle}</span>
+                                        <span class="timeline-time">${ev.timestamp}</span>
+                                    </div>
+                                    <p class="timeline-msg">${ev.message}</p>
+                                    <div class="timeline-footer">Provider: <span style="text-transform: capitalize;">${ev.provider}</span></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    timeline.innerHTML = html;
+                })
+                .catch(err => console.error("Error fetching events:", err));
+        }
+
+        // Trigger manual page refresh
+        function triggerManualRefresh() {
+            fetchHealth();
+            fetchStats();
+            fetchHotKeys();
+            fetchTimeline();
+        }
+
+        // Set refresh rate interval
+        function updateRefreshInterval() {
+            const val = document.getElementById('refresh-rate').value;
+            
+            // Clear existing interval
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+
+            if (val === 'pause') {
+                return;
+            }
+
+            const ms = parseInt(val);
+            refreshInterval = setInterval(() => {
+                fetchHealth();
+                fetchStats();
+                fetchHotKeys();
+                fetchTimeline();
+            }, ms);
+        }
+
+        // Initial setup on window load
+        window.addEventListener('load', () => {
+            initCharts();
+            triggerManualRefresh();
+            updateRefreshInterval();
+        });
+    </script>
+</body>
+</html>
