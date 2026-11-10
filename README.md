@@ -4,6 +4,11 @@
 
 I built this after asking a simple question: what actually happens to a Spring Boot app when its cache server dies? With most setups, the answer is "everything falls over at once." I wanted a cache that notices the failure, quietly covers for it, and heals itself when Redis comes back.
 
+
+https://github.com/user-attachments/assets/4907ee19-fcfd-4e27-88d6-91d36e911495
+
+
+
 **Try it live:** [Dashboard](https://resilient-cache-engine.onrender.com) · [Sample API call](https://resilient-cache-engine.onrender.com/products/B07JW9H4J1)
 *(The demo runs on a free Render instance, so the first load may take about 30 seconds to wake up.)*
 
